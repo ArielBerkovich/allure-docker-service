@@ -140,6 +140,7 @@
             ],
             "summary":"Send results files (from version 2.12.1)",
             "consumes":[
+               "application/zip",
                "application/json",
                "multipart/form-data"
             ],
@@ -164,6 +165,12 @@
                "description":"Files to send",
                "required":"true",
                "content":{
+                  "application/zip": {
+                    "schema": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  },
                   "application/json":{
                      "schema":{
                         "$ref":"#/components/schemas/results"

@@ -859,15 +859,7 @@ def send_results_endpoint(): #pylint: disable=too-many-branches
             return jsonify({ 'meta_data': { 'message': 'Access Forbidden' } }), 403
 
         content_type = str(request.content_type)
-        if content_type is None:
-            raise Exception("Header 'Content-Type' should start with 'application/json' or 'multipart/form-data'") #pylint: disable=line-too-long
-
-        if (
-                content_type.startswith('application/json') is False and
-                content_type.startswith('multipart/form-data') is False
-            ):
-            raise Exception("Header 'Content-Type' should start with 'application/json' or 'multipart/form-data'") #pylint: disable=line-too-long
-
+        validate_send_results_content_type(content_type)
         project_id = resolve_project(request.args.get('project_id'))
         if is_existent_project(project_id) is False:
             if request.args.get('force_project_creation') == 'true':
@@ -886,6 +878,10 @@ def send_results_endpoint(): #pylint: disable=too-many-branches
         processed_files = []
         failed_files = []
         results_project = '{}/results'.format(get_project_path(project_id))
+
+        if content_type.startswith('application/zip') is True:
+            validated_results = validate_zip_results(request.get_data())
+            send_json_results(results_project, validated_results, processed_files, failed_files)
 
         if content_type.startswith('application/json') is True:
             json_body = request.get_json()
@@ -1490,10 +1486,40 @@ def get_reports_endpoint(project_id, path):
         return redirect(url_for('get_project_endpoint', project_id=project_id, _external=True))
 
 
+def validate_send_results_content_type(content_type):
+    if content_type is None:
+        raise Exception(
+            "Header 'Content-Type' should start with 'application/json' or 'multipart/form-data'")
+
+    if (
+            content_type.startswith('application/zip') is False and
+            content_type.startswith('application/json') is False and
+            content_type.startswith('multipart/form-data') is False
+    ):
+        raise Exception(
+            "Header 'Content-Type' should start with 'application/json' or 'multipart/form-data'")
+
+
 def validate_files_array(files):
     if not files:
         raise Exception("'files[]' array is empty")
     return files
+
+
+def validate_zip_results(zip_content):
+    zip_file = zipfile.ZipFile(io.BytesIO(zip_content))
+    if not zip_file.infolist():
+        raise Exception("zip file contains no results")
+
+    validated_results = []
+    for file_info in zip_file.infolist():
+        validated_result = {}
+        with zip_file.open(file_info.filename) as file:
+            validated_result["file_name"] = file.name
+            validated_result["content_base64"] = bytes(file.read())
+        validated_results.append(validated_result)
+    return validated_results
+
 
 def validate_json_results(results):
     if  isinstance(results, list) is False:
